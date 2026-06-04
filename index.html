@@ -547,10 +547,11 @@ let scanInterval = null;
 
 // ══ INIT ══
 (function(){
+  // Inicializar Firebase siempre (necesario tanto para login como para QR cobro)
+  try{ if(!firebase.apps.length) firebase.initializeApp(FB_CONFIG); db=firebase.database(); }catch(e){ console.warn('Firebase init error',e); }
   // Check if QR cobro landing
   const p = new URLSearchParams(window.location.search);
-  if(p.get('cobro')){ showCobroLanding(p); return; }
-  try{ if(!firebase.apps.length) firebase.initializeApp(FB_CONFIG); db=firebase.database(); }catch(e){}
+  if(p.get('cobro')){ showCobroLanding(p); }
 })();
 
 // ══ QR COBRO LANDING ══
@@ -580,6 +581,48 @@ function showCobroLanding(p){
 async function pagarDesdeQR(comercio, monto, token, desc){
   const id = document.getElementById('cl-id').value.trim().toUpperCase();
   if(!id){ return; }
+
+  // Buscar estudiante y verificar PIN antes de cobrar
+  if(!db){ document.getElementById('cl-result').innerHTML='<div style="color:#f87171;font-size:.82rem">⚠️ Sin conexión Firebase</div>'; return; }
+  const snap = await db.ref('corposepi').once('value');
+  const data = snap.val();
+  if(!data){ document.getElementById('cl-result').innerHTML='<div style="color:#f87171;font-size:.82rem">⚠️ Sin datos</div>'; return; }
+  const students = data.students||[];
+  const idx = students.findIndex(s=>s&&s.id===id);
+  if(idx<0){ document.getElementById('cl-result').innerHTML='<div style="color:#f87171;font-size:.82rem">❌ ID '+id+' no encontrado</div>'; return; }
+  const s = students[idx];
+  if(s.status==='blocked'){ document.getElementById('cl-result').innerHTML='<div style="color:#f87171;font-size:.82rem">🚫 Carnet bloqueado</div>'; return; }
+
+  // Si tiene PIN → pedir antes de cobrar
+  if(s.pin && s.pin.length===4){
+    dfPinBuffer=''; dfPinIntentos=0; dfPinModo='verify';
+    dfPinEstudiante = {...s, idx};
+    document.getElementById('pin-df-user').textContent = '👤 '+s.nombres+' '+s.apellidos;
+    document.getElementById('pin-df-monto').textContent = monto+' '+token;
+    document.getElementById('pin-df-monto').style.color = token==='FNX'?'var(--corp3)':'var(--gold)';
+    document.getElementById('pin-df-err').textContent = '';
+    dfPinActualizarDots();
+    // Al confirmar PIN → procesar el pago
+    dfPinOnSuccess = async ()=>{
+      document.getElementById('pin-df').classList.remove('show');
+      const r2 = await procesarPago(id, parseFloat(monto), token, decodeURIComponent(desc), decodeURIComponent(comercio));
+      const el2 = document.getElementById('cl-result');
+      if(r2.ok){
+        el2.innerHTML=`<div style="background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);border-radius:12px;padding:.75rem;text-align:center;">
+          <div style="color:#4ade80;font-weight:800;font-size:.95rem">✅ ¡Pago exitoso!</div>
+          <div style="color:#ccc;font-size:.78rem;margin-top:.3rem">${r2.nombre}</div>
+          <div style="color:#888;font-size:.68rem;margin-top:.15rem">-${monto} ${token} · Saldo: ${r2.saldoNuevo} ${token}</div>
+        </div>`;
+        document.getElementById('cl-id').value='';
+      } else {
+        el2.innerHTML=`<div style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:12px;padding:.75rem;color:#f87171;font-size:.82rem;">${r2.error}</div>`;
+      }
+    };
+    document.getElementById('pin-df').classList.add('show');
+    return;
+  }
+
+  // Sin PIN → cobrar directo (advertencia)
   const res = await procesarPago(id, parseFloat(monto), token, decodeURIComponent(desc), decodeURIComponent(comercio));
   const el = document.getElementById('cl-result');
   if(res.ok){

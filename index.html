@@ -535,25 +535,35 @@ let scanInterval = null;
 // ══ QR COBRO LANDING ══
 function showCobroLanding(p){
   const comercio = decodeURIComponent(p.get('comercio')||'CORPOSEPI');
-  const monto = p.get('monto')||'0';
-  const token = p.get('token')||'FNX';
-  const desc = decodeURIComponent(p.get('desc')||'');
-  try{ if(!firebase.apps.length) firebase.initializeApp(FB_CONFIG); db=firebase.database(); }catch(e){}
+  const monto    = p.get('monto')||'0';
+  const token    = p.get('token')||'CPI';
+  const desc     = decodeURIComponent(p.get('desc')||'');
 
-  document.body.innerHTML=`
-  <div style="min-height:100vh;background:#0a0a0a;display:flex;align-items:center;justify-content:center;padding:1rem;font-family:'Montserrat',sans-serif;">
+  // Ocultar login y app SIN destruir el PIN overlay
+  document.getElementById('login').style.display='none';
+  document.getElementById('app').style.display='none';
+
+  // Crear e insertar el landing (el PIN overlay queda intacto en el DOM)
+  const landing = document.createElement('div');
+  landing.id = 'cobro-landing';
+  landing.style.cssText='position:fixed;inset:0;background:#0a0a0a;display:flex;align-items:center;justify-content:center;padding:1rem;font-family:Montserrat,sans-serif;z-index:50;';
+  landing.innerHTML=`
     <div style="background:#161616;border:1px solid #2a2a2a;border-radius:20px;padding:2rem;max-width:380px;width:100%;text-align:center;">
-      <div style="font-size:2rem;margin-bottom:.4rem">💳</div>
+      <div style="font-size:2rem;margin-bottom:.4rem">🏆</div>
       <div style="font-size:.65rem;color:#888;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.25rem">Cobro de</div>
       <div style="font-size:1rem;font-weight:800;color:#fff;margin-bottom:.2rem">${comercio}</div>
-      <div style="font-size:2rem;font-weight:800;color:${token==='CPI'?'#D4A843':'#E8651A'};font-family:monospace;margin:.75rem 0;">${monto} ${token}</div>
+      <div style="font-size:2rem;font-weight:800;color:#D4A843;font-family:monospace;margin:.75rem 0;">${monto} CPI</div>
       <div style="font-size:.75rem;color:#888;margin-bottom:1.5rem">${desc}</div>
-      <input id="cl-id" style="width:100%;background:#222;border:1px solid #444;border-radius:10px;padding:.75rem 1rem;color:#fff;font-family:monospace;font-size:1rem;outline:none;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem;text-align:center;" placeholder="CORP-2025-0001" autofocus onkeydown="if(event.key==='Enter')pagarDesdeQR('${encodeURIComponent(comercio)}','${monto}','${token}','${encodeURIComponent(desc)}')"/>
-      <button onclick="pagarDesdeQR('${encodeURIComponent(comercio)}','${monto}','${token}','${encodeURIComponent(desc)}')" style="width:100%;background:linear-gradient(135deg,#B8410A,#E8651A);border:none;border-radius:10px;padding:.85rem;color:#fff;font-family:'Montserrat',sans-serif;font-size:.9rem;font-weight:700;cursor:pointer;">✅ Confirmar pago ${monto} ${token}</button>
+      <input id="cl-id" style="width:100%;background:#222;border:1px solid #444;border-radius:10px;padding:.75rem 1rem;color:#fff;font-family:monospace;font-size:1rem;outline:none;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem;text-align:center;" placeholder="CORP-2025-0001" autofocus
+        onkeydown="if(event.key==='Enter')pagarDesdeQR('${encodeURIComponent(comercio)}','${monto}','CPI','${encodeURIComponent(desc)}')"/>
+      <button onclick="pagarDesdeQR('${encodeURIComponent(comercio)}','${monto}','CPI','${encodeURIComponent(desc)}')"
+        style="width:100%;background:linear-gradient(135deg,#92400e,#D4A843);border:none;border-radius:10px;padding:.85rem;color:#fff;font-family:'Montserrat',sans-serif;font-size:.9rem;font-weight:700;cursor:pointer;">
+        ✅ Confirmar pago ${monto} CPI
+      </button>
       <div id="cl-result" style="margin-top:1rem;"></div>
       <div style="font-size:.6rem;color:#333;margin-top:1.5rem;line-height:1.8;">💳 CORPOSEPI · NIT 901898846-6 · 3208331239</div>
-    </div>
-  </div>`;
+    </div>`;
+  document.body.appendChild(landing);
 }
 
 async function pagarDesdeQR(comercio, monto, token, desc){

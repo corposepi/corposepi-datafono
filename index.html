@@ -827,6 +827,23 @@ async function procesarPago(id, monto, token, desc, comercio){
     };
     const txKey = `tx-${Date.now()}`;
     await db.ref(`transacciones/${ahora.toISOString().slice(0,10)}/${txKey}`).set(tx);
+
+    // Acreditar CPI al balance del comercio
+    if(token==='CPI' && comercioKey){
+      const snapCom = await db.ref('comercios/'+comercioKey+'/cpi').once('value');
+      const saldoCom = parseFloat(snapCom.val()||0);
+      await db.ref('comercios/'+comercioKey+'/cpi').set((saldoCom+monto).toFixed(2));
+    } else if(token==='CPI' && comercio){
+      // Pago vía QR: buscar comercio por nombre
+      const snapC = await db.ref('comercios').orderByChild('nombre').equalTo(decodeURIComponent(comercio)).once('value');
+      if(snapC.exists()){
+        snapC.forEach(c=>{
+          const saldoCom = parseFloat(c.val().cpi||0);
+          db.ref('comercios/'+c.key+'/cpi').set((saldoCom+monto).toFixed(2));
+        });
+      }
+    }
+
     historial.unshift(tx);
     renderHistorial();
     return {ok:true, tx, nombre:`${s.nombres} ${s.apellidos}`, saldoNuevo, cel:s.cel||''};

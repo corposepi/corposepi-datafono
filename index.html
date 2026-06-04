@@ -247,6 +247,27 @@ html,body{height:100%;font-family:'Montserrat',sans-serif;background:var(--dark)
 }
 .lb-err.show{display:block;}
 
+/* ══ PIN DATAFONO ══ */
+#pin-df{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:200;padding:1rem;}
+#pin-df.show{display:flex;}
+.pin-df-box{background:#161616;border:1px solid rgba(255,255,255,.08);border-radius:24px;padding:1.75rem 1.5rem;max-width:320px;width:100%;text-align:center;box-shadow:0 0 0 1px rgba(184,65,10,.15),0 24px 60px rgba(0,0,0,.7);}
+.pin-df-title{font-size:.95rem;font-weight:800;color:#fff;margin-bottom:.2rem;}
+.pin-df-sub{font-size:.62rem;color:rgba(255,255,255,.3);margin-bottom:.85rem;line-height:1.6;}
+.pin-df-user{font-size:.75rem;color:var(--corp3);font-weight:700;margin-bottom:1rem;background:rgba(184,65,10,.1);border:1px solid rgba(184,65,10,.2);border-radius:9px;padding:.45rem .8rem;}
+.pin-df-monto{font-size:1.5rem;font-weight:800;font-family:'DM Mono',monospace;margin-bottom:1.1rem;}
+.pin-df-dots{display:flex;gap:.65rem;justify-content:center;margin-bottom:1.1rem;}
+.pin-df-dot{width:13px;height:13px;border-radius:50%;background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.18);transition:all .12s;}
+.pin-df-dot.filled{background:var(--corp3);border-color:var(--corp);}
+.pin-df-dot.error{background:var(--red,#f87171);border-color:var(--red,#f87171);}
+.pin-df-dot.ok{background:#4ade80;border-color:#4ade80;}
+.pin-df-err{font-size:.7rem;color:#f87171;min-height:1rem;margin-bottom:.4rem;}
+.pin-df-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:.45rem;margin-bottom:.85rem;}
+.pin-df-k{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);border-radius:11px;padding:.8rem;font-size:1.15rem;font-weight:700;cursor:pointer;transition:all .12s;user-select:none;}
+.pin-df-k:active{background:rgba(184,65,10,.35);transform:scale(.94);}
+.pin-df-k.del{font-size:.85rem;color:#888;}
+.pin-df-k.ok-k{background:linear-gradient(135deg,var(--corp),var(--corp3));color:#fff;font-size:.78rem;letter-spacing:.03em;}
+.pin-df-cancelar{background:transparent;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:.55rem;color:#888;font-family:'Montserrat',sans-serif;font-size:.78rem;cursor:pointer;width:100%;}
+
 </style>
 </head>
 <body>
@@ -443,6 +464,38 @@ html,body{height:100%;font-family:'Montserrat',sans-serif;background:var(--dark)
   </div>
 
 </div><!-- /app -->
+
+<!-- PIN DATAFONO -->
+<div id="pin-df">
+  <div class="pin-df-box">
+    <div class="pin-df-title">🔐 Confirma con tu PIN</div>
+    <div class="pin-df-sub">El estudiante ingresa su PIN de 4 dígitos</div>
+    <div class="pin-df-user" id="pin-df-user"></div>
+    <div class="pin-df-monto" id="pin-df-monto"></div>
+    <div class="pin-df-dots">
+      <div class="pin-df-dot" id="dfd0"></div>
+      <div class="pin-df-dot" id="dfd1"></div>
+      <div class="pin-df-dot" id="dfd2"></div>
+      <div class="pin-df-dot" id="dfd3"></div>
+    </div>
+    <div class="pin-df-err" id="pin-df-err"></div>
+    <div class="pin-df-pad">
+      <div class="pin-df-k" onclick="dfPinKey('1')">1</div>
+      <div class="pin-df-k" onclick="dfPinKey('2')">2</div>
+      <div class="pin-df-k" onclick="dfPinKey('3')">3</div>
+      <div class="pin-df-k" onclick="dfPinKey('4')">4</div>
+      <div class="pin-df-k" onclick="dfPinKey('5')">5</div>
+      <div class="pin-df-k" onclick="dfPinKey('6')">6</div>
+      <div class="pin-df-k" onclick="dfPinKey('7')">7</div>
+      <div class="pin-df-k" onclick="dfPinKey('8')">8</div>
+      <div class="pin-df-k" onclick="dfPinKey('9')">9</div>
+      <div class="pin-df-k del" onclick="dfPinDel()">⌫</div>
+      <div class="pin-df-k" onclick="dfPinKey('0')">0</div>
+      <div class="pin-df-k ok-k" onclick="dfPinOk()">OK</div>
+    </div>
+    <button class="pin-df-cancelar" onclick="dfPinCancelar()">✕ Cancelar pago</button>
+  </div>
+</div>
 
 <!-- PAGO SCREEN -->
 <div id="pago-screen">
@@ -642,6 +695,35 @@ async function confirmarPago(){
   const id = document.getElementById('ps-id-input').value.trim().toUpperCase();
   if(!id){ showToast('⚠️ Ingresa el ID del estudiante'); return; }
   if(!transaccionActual) return;
+
+  // Buscar estudiante para verificar PIN antes de cobrar
+  if(!db){ showToast('⚠️ Sin conexión'); return; }
+  const snap = await db.ref('corposepi').once('value');
+  const data = snap.val();
+  if(!data){ showToast('⚠️ Sin datos Firebase'); return; }
+  const students = data.students||[];
+  const idx = students.findIndex(s=>s&&s.id===id);
+  if(idx<0){ showToast('❌ ID '+id+' no encontrado'); return; }
+  const s = students[idx];
+  if(s.status==='blocked'){ showToast('🚫 Carnet bloqueado'); return; }
+
+  // Si el estudiante tiene PIN → pedirlo
+  if(s.pin && s.pin.length===4){
+    dfPinBuffer = '';
+    dfPinIntentos = 0;
+    dfPinEstudiante = {...s, idx};
+    const t = transaccionActual;
+    document.getElementById('pin-df-user').textContent = '👤 '+s.nombres+' '+s.apellidos+' · '+id;
+    document.getElementById('pin-df-monto').textContent = t.monto+' '+t.token;
+    document.getElementById('pin-df-monto').style.color = t.token==='FNX'?'var(--corp3)':'var(--gold)';
+    document.getElementById('pin-df-err').textContent = '';
+    dfPinActualizarDots();
+    document.getElementById('pin-df').classList.add('show');
+    return;
+  }
+
+  // Sin PIN configurado → advertir al comercio y proceder
+  showToast('⚠️ Sin PIN. Pide al estudiante que lo configure en Sistema Integral.');
   const res = await procesarPago(id, transaccionActual.monto, transaccionActual.token, transaccionActual.desc, transaccionActual.comercio);
   if(res.ok){
     document.getElementById('pago-screen').style.display='none';
@@ -868,6 +950,79 @@ function exportarHistorial(){
 }
 
 function showToast(m){ const t=document.getElementById('toast'); if(!t)return; t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3500); }
+
+// ══ PIN DATAFONO ══
+let dfPinBuffer = '';
+let dfPinIntentos = 0;
+let dfPinEstudiante = null; // {idx, pin, nombre, ...}
+
+function dfPinActualizarDots(estado){
+  for(let i=0;i<4;i++){
+    const d = document.getElementById('dfd'+i);
+    d.className = 'pin-df-dot';
+    if(estado) d.classList.add(estado);
+    else if(i < dfPinBuffer.length) d.classList.add('filled');
+  }
+}
+
+function dfPinKey(n){
+  if(dfPinBuffer.length >= 4) return;
+  dfPinBuffer += n;
+  dfPinActualizarDots();
+  if(dfPinBuffer.length === 4) setTimeout(dfPinOk, 300);
+}
+
+function dfPinDel(){
+  dfPinBuffer = dfPinBuffer.slice(0,-1);
+  document.getElementById('pin-df-err').textContent = '';
+  dfPinActualizarDots();
+}
+
+async function dfPinOk(){
+  if(dfPinBuffer.length < 4){
+    document.getElementById('pin-df-err').textContent = 'Ingresa 4 dígitos';
+    return;
+  }
+  if(dfPinBuffer === dfPinEstudiante.pin){
+    // PIN correcto → procesar pago
+    dfPinActualizarDots('ok');
+    setTimeout(async ()=>{
+      document.getElementById('pin-df').classList.remove('show');
+      const t = transaccionActual;
+      const res = await procesarPago(dfPinEstudiante.id, t.monto, t.token, t.desc, t.comercio);
+      if(res.ok){
+        document.getElementById('pago-screen').style.display='none';
+        mostrarExito(res);
+      } else {
+        showToast(res.error);
+      }
+      dfPinBuffer = ''; dfPinIntentos = 0; dfPinEstudiante = null;
+    }, 500);
+  } else {
+    dfPinIntentos++;
+    dfPinBuffer = '';
+    dfPinActualizarDots('error');
+    if(dfPinIntentos >= 3){
+      document.getElementById('pin-df-err').textContent = '🚫 3 intentos fallidos. Pago cancelado.';
+      document.querySelectorAll('.pin-df-k').forEach(k=>k.style.pointerEvents='none');
+      setTimeout(()=>{
+        document.getElementById('pin-df').classList.remove('show');
+        document.querySelectorAll('.pin-df-k').forEach(k=>k.style.pointerEvents='');
+        dfPinBuffer=''; dfPinIntentos=0; dfPinEstudiante=null;
+        dfPinActualizarDots();
+      }, 2000);
+    } else {
+      document.getElementById('pin-df-err').textContent = `❌ PIN incorrecto (${dfPinIntentos}/3)`;
+      setTimeout(()=>dfPinActualizarDots(), 700);
+    }
+  }
+}
+
+function dfPinCancelar(){
+  document.getElementById('pin-df').classList.remove('show');
+  dfPinBuffer=''; dfPinIntentos=0; dfPinEstudiante=null;
+  dfPinActualizarDots();
+}
 </script>
 </body>
 </html>

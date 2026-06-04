@@ -281,15 +281,7 @@ html,body{height:100%;font-family:'Montserrat',sans-serif;background:var(--dark)
     <div class="lb-title">Datáfono CORPOSEPI</div>
     <div class="lb-sub">Sistema de cobro FNX · CPI</div>
     <div class="lb-err" id="lb-err">Contraseña incorrecta.</div>
-    <input class="lb-input" id="comercio-nombre" placeholder="Nombre del comercio (ej: Cooperativa)"/>
-    <select class="lb-select" id="comercio-tipo">
-      <option value="">— Tipo de comercio —</option>
-      <option value="Cooperativa Escolar">🏪 Cooperativa Escolar</option>
-      <option value="Tienda CORPOSEPI">🏫 Tienda CORPOSEPI</option>
-      <option value="Cafetería">☕ Cafetería</option>
-      <option value="Comercio Asociado">🤝 Comercio Asociado</option>
-      <option value="Banco Fénix">🏦 Banco Fénix</option>
-    </select>
+    <input class="lb-input" id="login-usuario" placeholder="Usuario (ej: cooperativa)" onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()"/>
     <input class="lb-input" id="login-pass" type="password" placeholder="Contraseña" onkeydown="if(event.key==='Enter')doLogin()"/>
     <button class="lb-btn" onclick="doLogin()">Activar datáfono</button>
     
@@ -603,23 +595,71 @@ async function pagarDesdeQR(comercio, monto, token, desc){
 }
 
 // ══ LOGIN ══
-function doLogin(){
-  const nombre = document.getElementById('comercio-nombre').value.trim();
-  const tipo = document.getElementById('comercio-tipo').value;
-  const pass = document.getElementById('login-pass').value;
-  if(!nombre){ showToast('⚠️ Ingresa el nombre del comercio'); return; }
-  if(!tipo){ showToast('⚠️ Selecciona el tipo de comercio'); return; }
-  if(!PASS.includes(pass)){
-    document.getElementById('lb-err').classList.add('show');
-    setTimeout(()=>document.getElementById('lb-err').classList.remove('show'),3000);
-    return;
+let comercioKey = ''; // key Firebase del comercio autenticado
+
+async function doLogin(){
+  const usuario = document.getElementById('login-usuario').value.trim().toLowerCase();
+  const pass    = document.getElementById('login-pass').value;
+  const errEl   = document.getElementById('lb-err');
+  if(!usuario||!pass){ errEl.textContent='Ingresa usuario y contraseña'; errEl.classList.add('show'); return; }
+  if(!db){ errEl.textContent='Sin conexión Firebase'; errEl.classList.add('show'); return; }
+
+  const snap = await db.ref('comercios').orderByChild('usuario').equalTo(usuario).once('value');
+  if(!snap.exists()){
+    errEl.textContent='Usuario no encontrado'; errEl.classList.add('show');
+    setTimeout(()=>errEl.classList.remove('show'),3000); return;
   }
-  comercioNombre = nombre;
-  comercioTipo = tipo;
-  document.getElementById('tb-comercio').textContent = nombre + ' · ' + tipo;
+  let comData=null, comKey=null;
+  snap.forEach(c=>{comData=c.val(); comKey=c.key;});
+
+  if(comData.password!==pass){
+    errEl.textContent='Contraseña incorrecta'; errEl.classList.add('show');
+    setTimeout(()=>errEl.classList.remove('show'),3000); return;
+  }
+  if(comData.status==='blocked'){
+    errEl.textContent='Comercio bloqueado. Contacta al admin.'; errEl.classList.add('show'); return;
+  }
+
+  comercioNombre = comData.nombre;
+  comercioTipo   = comData.tipo||'';
+  comercioKey    = comKey;
+  document.getElementById('tb-comercio').textContent = comData.nombre + ' · ' + (comData.tipo||'');
   document.getElementById('login').style.display='none';
-  document.getElementById('app').style.display='flex';
-  cargarHistorial();
+
+  // PIN flow
+  if(comData.pin && comData.pin.length===4){
+    dfPinBuffer=''; dfPinIntentos=0;
+    dfPinEstudiante = {...comData, _key:comKey, id:usuario, isComercio:true};
+    document.getElementById('pin-df-user').textContent = '🏪 '+comData.nombre;
+    document.getElementById('pin-df-monto').textContent = 'Ingresa tu PIN de acceso';
+    document.getElementById('pin-df-monto').style.color='var(--gold)';
+    document.getElementById('pin-df-err').textContent='';
+    dfPinActualizarDots();
+    // Al verificar PIN de comercio → entrar al app
+    dfPinOnSuccess = ()=>{
+      document.getElementById('pin-df').classList.remove('show');
+      document.getElementById('app').style.display='flex';
+      cargarHistorial();
+    };
+    document.getElementById('pin-df').classList.add('show');
+  } else {
+    // Sin PIN → crear PIN antes de entrar
+    dfPinBuffer=''; dfPinIntentos=0;
+    dfPinEstudiante = {...comData, _key:comKey, id:usuario, isComercio:true, pin:null};
+    document.getElementById('pin-df-user').textContent = '🏪 '+comData.nombre;
+    document.getElementById('pin-df-monto').textContent = 'Crea tu PIN de 4 dígitos';
+    document.getElementById('pin-df-monto').style.color='var(--corp3)';
+    document.getElementById('pin-df-err').textContent='';
+    dfPinActualizarDots();
+    dfPinOnSuccess = ()=>{
+      document.getElementById('pin-df').classList.remove('show');
+      document.getElementById('app').style.display='flex';
+      cargarHistorial();
+    };
+    document.getElementById('pin-df').classList.add('show');
+    // Cambiar a modo crear
+    dfPinModo = 'create';
+  }
 }
 
 // ══ TABS ══
@@ -954,7 +994,10 @@ function showToast(m){ const t=document.getElementById('toast'); if(!t)return; t
 // ══ PIN DATAFONO ══
 let dfPinBuffer = '';
 let dfPinIntentos = 0;
-let dfPinEstudiante = null; // {idx, pin, nombre, ...}
+let dfPinEstudiante = null;
+let dfPinModo = 'verify';        // 'verify' | 'create' | 'confirm'
+let dfPinPrimero = '';
+let dfPinOnSuccess = null;       // callback tras PIN correcto (login comercio)
 
 function dfPinActualizarDots(estado){
   for(let i=0;i<4;i++){
@@ -979,41 +1022,71 @@ function dfPinDel(){
 }
 
 async function dfPinOk(){
-  if(dfPinBuffer.length < 4){
-    document.getElementById('pin-df-err').textContent = 'Ingresa 4 dígitos';
+  if(dfPinBuffer.length < 4){ document.getElementById('pin-df-err').textContent='Ingresa 4 dígitos'; return; }
+
+  // ── Modo crear PIN (comercio sin PIN o estudiante sin PIN) ──
+  if(dfPinModo==='create'){
+    dfPinPrimero = dfPinBuffer; dfPinBuffer=''; dfPinModo='confirm';
+    document.getElementById('pin-df-monto').textContent='Confirma tu PIN';
+    document.getElementById('pin-df-err').textContent='';
+    dfPinActualizarDots(); return;
+  }
+  if(dfPinModo==='confirm'){
+    if(dfPinBuffer!==dfPinPrimero){
+      document.getElementById('pin-df-err').textContent='❌ No coinciden. Intenta de nuevo.';
+      dfPinActualizarDots('error');
+      setTimeout(()=>{ dfPinBuffer='';dfPinPrimero='';dfPinModo='create';
+        document.getElementById('pin-df-monto').textContent='Crea tu PIN de 4 dígitos';
+        document.getElementById('pin-df-err').textContent='';dfPinActualizarDots();},1200);
+      return;
+    }
+    // Guardar PIN
+    const pin = dfPinBuffer;
+    if(dfPinEstudiante.isComercio){
+      await db.ref('comercios/'+dfPinEstudiante._key+'/pin').set(pin);
+    } else {
+      const idx = dfPinEstudiante.idx;
+      await db.ref('corposepi/students/'+idx+'/pin').set(pin);
+    }
+    dfPinActualizarDots('ok');
+    setTimeout(()=>{
+      if(dfPinOnSuccess){ dfPinOnSuccess(); dfPinOnSuccess=null; }
+      else { document.getElementById('pin-df').classList.remove('show'); }
+      dfPinBuffer='';dfPinModo='verify';dfPinEstudiante=null;dfPinActualizarDots();
+    }, 500);
     return;
   }
+
+  // ── Modo verificar ──
   if(dfPinBuffer === dfPinEstudiante.pin){
-    // PIN correcto → procesar pago
     dfPinActualizarDots('ok');
     setTimeout(async ()=>{
+      // Login de comercio
+      if(dfPinOnSuccess){ dfPinOnSuccess(); dfPinOnSuccess=null;
+        dfPinBuffer='';dfPinIntentos=0;dfPinEstudiante=null;dfPinActualizarDots(); return; }
+      // Pago de estudiante
       document.getElementById('pin-df').classList.remove('show');
       const t = transaccionActual;
       const res = await procesarPago(dfPinEstudiante.id, t.monto, t.token, t.desc, t.comercio);
-      if(res.ok){
-        document.getElementById('pago-screen').style.display='none';
-        mostrarExito(res);
-      } else {
-        showToast(res.error);
-      }
-      dfPinBuffer = ''; dfPinIntentos = 0; dfPinEstudiante = null;
+      if(res.ok){ document.getElementById('pago-screen').style.display='none'; mostrarExito(res); }
+      else { showToast(res.error); }
+      dfPinBuffer='';dfPinIntentos=0;dfPinEstudiante=null;dfPinActualizarDots();
     }, 500);
   } else {
     dfPinIntentos++;
-    dfPinBuffer = '';
+    dfPinBuffer='';
     dfPinActualizarDots('error');
-    if(dfPinIntentos >= 3){
-      document.getElementById('pin-df-err').textContent = '🚫 3 intentos fallidos. Pago cancelado.';
+    if(dfPinIntentos>=3){
+      document.getElementById('pin-df-err').textContent='🚫 3 intentos fallidos.';
       document.querySelectorAll('.pin-df-k').forEach(k=>k.style.pointerEvents='none');
       setTimeout(()=>{
         document.getElementById('pin-df').classList.remove('show');
         document.querySelectorAll('.pin-df-k').forEach(k=>k.style.pointerEvents='');
-        dfPinBuffer=''; dfPinIntentos=0; dfPinEstudiante=null;
-        dfPinActualizarDots();
-      }, 2000);
+        dfPinBuffer='';dfPinIntentos=0;dfPinEstudiante=null;dfPinOnSuccess=null;dfPinActualizarDots();
+      },2000);
     } else {
-      document.getElementById('pin-df-err').textContent = `❌ PIN incorrecto (${dfPinIntentos}/3)`;
-      setTimeout(()=>dfPinActualizarDots(), 700);
+      document.getElementById('pin-df-err').textContent=`❌ PIN incorrecto (${dfPinIntentos}/3)`;
+      setTimeout(()=>dfPinActualizarDots(),700);
     }
   }
 }

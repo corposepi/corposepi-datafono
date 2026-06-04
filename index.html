@@ -308,6 +308,7 @@ html,body{height:100%;font-family:'Montserrat',sans-serif;background:var(--dark)
     <div class="tab" onclick="switchTab('escanear',this)">📷 Escanear</div>
     <div class="tab" onclick="switchTab('qrcobro',this)">🖨️ QR Cobro</div>
     <div class="tab" onclick="switchTab('historial',this)">📊 Historial</div>
+    <div class="tab" onclick="switchTab('misaldo',this)">💰 Mi saldo</div>
   </div>
 
   <!-- ══ COBRAR ══ -->
@@ -430,6 +431,38 @@ html,body{height:100%;font-family:'Montserrat',sans-serif;background:var(--dark)
       <div class="hist-list" id="hist-list">
         <div style="text-align:center;color:var(--muted);padding:2rem;font-size:.8rem;">Sin transacciones hoy</div>
       </div>
+    </div>
+  </div>
+
+  <!-- ══ MI SALDO ══ -->
+  <div class="tab-content" id="tab-misaldo">
+    <div style="padding:1rem;max-width:480px;margin:0 auto;width:100%;">
+
+      <!-- Saldo CPI -->
+      <div style="background:linear-gradient(135deg,#1a1400,#2a2000);border:1px solid rgba(212,168,67,.3);border-radius:18px;padding:1.5rem;text-align:center;margin-bottom:1rem;">
+        <div style="font-size:2.5rem;margin-bottom:.4rem">🏆</div>
+        <div style="font-size:.6rem;color:rgba(212,168,67,.6);text-transform:uppercase;letter-spacing:.12em;margin-bottom:.3rem">Saldo CPI acumulado</div>
+        <div style="font-size:2.8rem;font-weight:800;font-family:'DM Mono',monospace;color:#D4A843;line-height:1;" id="ms-cpi">—</div>
+        <div style="font-size:.78rem;color:rgba(212,168,67,.5);margin-top:.35rem" id="ms-pesos">— pesos</div>
+      </div>
+
+      <!-- Info conversión -->
+      <div style="background:rgba(74,222,128,.05);border:1px solid rgba(74,222,128,.15);border-radius:12px;padding:.9rem 1rem;font-size:.75rem;color:rgba(255,255,255,.5);line-height:1.9;margin-bottom:1rem;text-align:center;">
+        💱 <strong style="color:#4ade80">1 CPI = $1.000 pesos colombianos</strong><br>
+        Para convertir a pesos ve al <strong style="color:#4ade80">Cajero CORPOSEPI</strong>
+      </div>
+
+      <!-- Últimas ventas -->
+      <div style="background:var(--dark2);border:1px solid var(--dark3);border-radius:14px;overflow:hidden;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;border-bottom:1px solid var(--dark3);">
+          <div style="font-size:.82rem;font-weight:700;">Ventas de hoy</div>
+          <button onclick="cargarMiSaldo()" style="background:transparent;border:1px solid var(--dark4);border-radius:7px;padding:.25rem .6rem;color:var(--muted);font-size:.65rem;cursor:pointer;">↻</button>
+        </div>
+        <div id="ms-ventas" style="padding:.5rem;">
+          <div style="text-align:center;color:var(--muted);padding:1.5rem;font-size:.78rem;">Cargando...</div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -700,6 +733,39 @@ function switchTab(id,el){
   el.classList.add('active');
   document.getElementById('tab-'+id).classList.add('active');
   if(id!=='escanear') stopScan();
+  if(id==='misaldo') cargarMiSaldo();
+}
+
+// ══ MI SALDO ══
+async function cargarMiSaldo(){
+  if(!db||!comercioKey) return;
+  const snap = await db.ref('comercios/'+comercioKey).once('value');
+  const c = snap.val()||{};
+  const cpi = parseFloat(c.cpi||0);
+  const el = document.getElementById('ms-cpi');
+  const elP = document.getElementById('ms-pesos');
+  if(el) el.textContent = cpi.toFixed(2)+' CPI';
+  if(elP) elP.textContent = '$'+(cpi*1000).toLocaleString('es-CO')+' pesos';
+
+  // Ventas de hoy
+  const hoy = new Date().toLocaleDateString('en-CA');
+  const snapTx = await db.ref('transacciones/'+hoy).orderByChild('comercio').equalTo(comercioNombre).once('value');
+  const ventas=[]; snapTx.forEach(c=>ventas.push(c.val()));
+  ventas.sort((a,b)=>b.hora>a.hora?1:-1);
+  const ventasEl = document.getElementById('ms-ventas');
+  if(!ventasEl) return;
+  if(!ventas.length){
+    ventasEl.innerHTML='<div style="text-align:center;color:var(--muted);padding:1.5rem;font-size:.78rem;">Sin ventas hoy</div>';
+    return;
+  }
+  ventasEl.innerHTML = ventas.map(v=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem .6rem;border-bottom:1px solid rgba(255,255,255,.04);">
+      <div>
+        <div style="font-size:.78rem;font-weight:600;">${v.estudiante||'—'}</div>
+        <div style="font-size:.62rem;color:var(--muted)">${v.desc||''} · ${v.hora||''}</div>
+      </div>
+      <div style="font-size:.88rem;font-weight:800;font-family:'DM Mono',monospace;color:var(--gold)">+${v.monto} CPI</div>
+    </div>`).join('');
 }
 
 // selectToken eliminado — datáfono solo usa CPI

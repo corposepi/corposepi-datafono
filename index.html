@@ -279,7 +279,7 @@ html,body{height:100%;font-family:'Montserrat',sans-serif;background:var(--dark)
     <div class="login-logo"><img src="https://corposepi.github.io/corposepi-aprende/logo.png" alt="CORPOSEPI"/></div>
     <div class="lb-icon">💳</div>
     <div class="lb-title">Datáfono CORPOSEPI</div>
-    <div class="lb-sub">Sistema de cobro FNX · CPI</div>
+    <div class="lb-sub">Sistema de cobro CPI · Moneda real</div>
     <div class="lb-err" id="lb-err">Contraseña incorrecta.</div>
     <input class="lb-input" id="login-usuario" placeholder="Usuario (ej: cooperativa)" onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()"/>
     <input class="lb-input" id="login-pass" type="password" placeholder="Contraseña" onkeydown="if(event.key==='Enter')doLogin()"/>
@@ -313,25 +313,16 @@ html,body{height:100%;font-family:'Montserrat',sans-serif;background:var(--dark)
   <!-- ══ COBRAR ══ -->
   <div class="tab-content active" id="tab-cobrar">
     <div class="cobrar-wrap">
-      <!-- Token selector -->
-      <div class="token-selector">
-        <div class="ts-btn active-fnx" id="ts-fnx" onclick="selectToken('FNX',this)">
-          <div class="ts-icon">🔥</div>
-          <div class="ts-name" style="color:var(--corp3)">FNX</div>
-          <div class="ts-desc">Puntos día a día</div>
-        </div>
-        <div class="ts-btn" id="ts-cpi" onclick="selectToken('CPI',this)">
-          <div class="ts-icon">🏆</div>
-          <div class="ts-name" style="color:var(--gold)">CPI</div>
-          <div class="ts-desc">Reconocimientos</div>
-        </div>
+      <!-- Solo CPI -->
+      <div style="text-align:center;background:rgba(212,168,67,.08);border:1px solid rgba(212,168,67,.2);border-radius:12px;padding:.5rem .75rem;margin-bottom:.75rem;font-size:.72rem;color:var(--gold);font-weight:700;">
+        🏆 CPI — Moneda respaldada con dinero real
       </div>
 
       <!-- Monto -->
       <div class="monto-display">
         <div class="md-label">Monto a cobrar</div>
-        <div class="md-amount" id="md-amount" style="color:var(--corp3)">0</div>
-        <div class="md-token" id="md-token">FNX</div>
+        <div class="md-amount" id="md-amount" style="color:var(--gold)">0</div>
+        <div class="md-token" id="md-token" style="color:var(--gold)">CPI</div>
         <div class="md-equiv" id="md-equiv">Ingresa el monto</div>
       </div>
 
@@ -355,8 +346,8 @@ html,body{height:100%;font-family:'Montserrat',sans-serif;background:var(--dark)
       </div>
 
       <!-- Botón cobrar -->
-      <button class="cobrar-btn" id="cobrar-btn" onclick="iniciarCobro()">
-        💳 Cobrar en <span id="cobrar-token-lbl">FNX</span>
+      <button class="cobrar-btn" id="cobrar-btn" onclick="iniciarCobro()" style="background:linear-gradient(135deg,#92400e,var(--gold));">
+        💳 Cobrar en CPI
       </button>
     </div>
   </div>
@@ -386,26 +377,17 @@ html,body{height:100%;font-family:'Montserrat',sans-serif;background:var(--dark)
             <div style="font-size:.68rem;color:var(--muted);" id="scan-prog">—</div>
           </div>
         </div>
-        <div style="display:flex;gap:.5rem;margin-bottom:.75rem;">
-          <div style="flex:1;background:var(--dark3);border-radius:10px;padding:.6rem;text-align:center;">
-            <div style="font-size:.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;">FNX</div>
-            <div style="font-size:1rem;font-weight:800;color:var(--corp3);font-family:'DM Mono',monospace;" id="scan-fnx">0</div>
-          </div>
-          <div style="flex:1;background:var(--dark3);border-radius:10px;padding:.6rem;text-align:center;">
-            <div style="font-size:.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;">CPI</div>
-            <div style="font-size:1rem;font-weight:800;color:var(--gold);font-family:'DM Mono',monospace;" id="scan-cpi">0</div>
-          </div>
+        <div style="background:rgba(212,168,67,.08);border:1px solid rgba(212,168,67,.2);border-radius:10px;padding:.6rem;text-align:center;margin-bottom:.75rem;">
+            <div style="font-size:.55rem;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.2rem;">Saldo CPI</div>
+            <div style="font-size:1.1rem;font-weight:800;color:var(--gold);font-family:'DM Mono',monospace;" id="scan-cpi">0</div>
         </div>
-        <div style="font-size:.7rem;color:var(--muted);margin-bottom:.6rem;">Monto a cobrar</div>
-        <div style="display:flex;gap:.4rem;margin-bottom:.6rem;">
-          <input id="scan-monto" style="flex:1;background:var(--dark3);border:1px solid var(--dark4);border-radius:8px;padding:.6rem .8rem;color:var(--text);font-family:'DM Mono',monospace;font-size:1rem;outline:none;text-align:center;" placeholder="0" type="number"/>
-          <select id="scan-token-sel" style="background:var(--dark3);border:1px solid var(--dark4);border-radius:8px;padding:.6rem .8rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.82rem;outline:none;cursor:pointer;">
-            <option value="FNX">🔥 FNX</option>
-            <option value="CPI">🏆 CPI</option>
-          </select>
+        <div style="font-size:.7rem;color:var(--muted);margin-bottom:.6rem;">Monto a cobrar en CPI</div>
+        <div style="margin-bottom:.6rem;">
+          <input id="scan-monto" style="width:100%;background:var(--dark3);border:1px solid var(--dark4);border-radius:8px;padding:.6rem .8rem;color:var(--text);font-family:'DM Mono',monospace;font-size:1rem;outline:none;text-align:center;" placeholder="0" type="number"/>
+          <input type="hidden" id="scan-token-sel" value="CPI"/>
         </div>
         <input id="scan-desc" style="width:100%;background:var(--dark3);border:1px solid var(--dark4);border-radius:8px;padding:.58rem .8rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.8rem;outline:none;margin-bottom:.6rem;" placeholder="Descripción del cobro..."/>
-        <button onclick="cobrarEscaneado()" style="width:100%;background:linear-gradient(135deg,var(--corp),var(--corp3));border:none;border-radius:10px;padding:.75rem;color:#fff;font-family:'Montserrat',sans-serif;font-size:.88rem;font-weight:700;cursor:pointer;">💳 Cobrar</button>
+        <button onclick="cobrarEscaneado()" style="width:100%;background:linear-gradient(135deg,#92400e,var(--gold));border:none;border-radius:10px;padding:.75rem;color:#fff;font-family:'Montserrat',sans-serif;font-size:.88rem;font-weight:700;cursor:pointer;">💳 Cobrar CPI</button>
       </div>
     </div>
   </div>
@@ -416,13 +398,10 @@ html,body{height:100%;font-family:'Montserrat',sans-serif;background:var(--dark)
       <div class="qrc-card">
         <div class="qrc-title">🖨️ Generar QR de cobro fijo</div>
         <div style="font-size:.73rem;color:var(--muted);margin-bottom:.75rem;line-height:1.65;">El estudiante escanea este QR, ingresa su ID y el pago se descuenta automáticamente.</div>
-        <input class="qrc-input" id="qrc-monto" type="number" placeholder="Monto (ej: 5)"/>
-        <select class="qrc-input" id="qrc-token" style="cursor:pointer;">
-          <option value="FNX">🔥 FNX — Puntos día a día</option>
-          <option value="CPI">🏆 CPI — Reconocimientos</option>
-        </select>
+        <input class="qrc-input" id="qrc-monto" type="number" placeholder="Monto en CPI (ej: 5)"/>
+        <input type="hidden" id="qrc-token" value="CPI"/>
         <input class="qrc-input" id="qrc-desc" placeholder="Descripción (ej: Almuerzo, Cuaderno...)"/>
-        <button class="qrc-btn" onclick="generarQRCobro()">🖨️ Generar QR de cobro</button>
+        <button class="qrc-btn" onclick="generarQRCobro()" style="background:linear-gradient(135deg,#92400e,var(--gold));">🖨️ Generar QR de cobro CPI</button>
       </div>
       <div id="qr-cobro-result" style="display:none;">
         <div class="qr-cobro-display">
@@ -441,8 +420,7 @@ html,body{height:100%;font-family:'Montserrat',sans-serif;background:var(--dark)
   <div class="tab-content" id="tab-historial">
     <div class="hist-wrap">
       <div class="hist-stats">
-        <div class="hs"><div class="hs-v" id="hs-total" style="color:var(--corp3)">0</div><div class="hs-l">Transacciones</div></div>
-        <div class="hs"><div class="hs-v" id="hs-fnx" style="color:var(--corp3)">0</div><div class="hs-l">FNX cobrados</div></div>
+        <div class="hs"><div class="hs-v" id="hs-total" style="color:var(--gold)">0</div><div class="hs-l">Transacciones</div></div>
         <div class="hs"><div class="hs-v" id="hs-cpi" style="color:var(--gold)">0</div><div class="hs-l">CPI cobrados</div></div>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -537,7 +515,7 @@ let db = null;
 let comercioNombre = '';
 let comercioTipo = '';
 let montoActual = '0';
-let tokenActual = 'FNX';
+let tokenActual = 'CPI'; // Solo CPI en el datáfono
 let estudianteActual = null;
 let transaccionActual = null;
 let historial = [];
@@ -714,17 +692,7 @@ function switchTab(id,el){
   if(id!=='escanear') stopScan();
 }
 
-// ══ TOKEN SELECTOR ══
-function selectToken(token, el){
-  tokenActual = token;
-  document.getElementById('ts-fnx').className='ts-btn'+(token==='FNX'?' active-fnx':'');
-  document.getElementById('ts-cpi').className='ts-btn'+(token==='CPI'?' active-cpi':'');
-  const amount = document.getElementById('md-amount');
-  amount.style.color = token==='FNX'?'var(--corp3)':'var(--gold)';
-  document.getElementById('md-token').textContent = token;
-  document.getElementById('cobrar-token-lbl').textContent = token;
-  updateEquiv();
-}
+// selectToken eliminado — datáfono solo usa CPI
 
 // ══ TECLADO ══
 function tecla(k){
@@ -858,7 +826,7 @@ async function procesarPago(id, monto, token, desc, comercio){
 // ══ MOSTRAR ÉXITO ══
 function mostrarExito(res){
   document.getElementById('ss-monto').textContent = `-${res.tx.monto} ${res.tx.token}`;
-  document.getElementById('ss-monto').style.color = res.tx.token==='FNX'?'var(--corp3)':'var(--gold)';
+  document.getElementById('ss-monto').style.color = 'var(--gold)';
   document.getElementById('ss-info').textContent = `${res.nombre}\nSaldo nuevo: ${res.saldoNuevo} ${res.tx.token}\n${res.tx.desc} · ${comercioNombre}\n${res.tx.hora}`;
   document.getElementById('ss-wa').style.display = res.cel?'flex':'none';
   document.getElementById('success-screen').style.display='flex';
@@ -1000,15 +968,13 @@ async function cargarHistorial(){
 
 function renderHistorial(){
   const list=document.getElementById('hist-list');
-  const totalFNX=historial.filter(t=>t.token==='FNX').reduce((a,t)=>a+t.monto,0);
-  const totalCPI=historial.filter(t=>t.token==='CPI').reduce((a,t)=>a+t.monto,0);
+  const totalCPI=historial.reduce((a,t)=>a+t.monto,0);
   document.getElementById('hs-total').textContent=historial.length;
-  document.getElementById('hs-fnx').textContent=totalFNX.toFixed(1);
   document.getElementById('hs-cpi').textContent=totalCPI.toFixed(1);
   if(!historial.length){ list.innerHTML='<div style="text-align:center;color:var(--muted);padding:2rem;font-size:.8rem;">Sin transacciones hoy</div>'; return; }
   list.innerHTML=historial.map(t=>`
     <div class="ht-item">
-      <div class="hti-icon ${t.token==='FNX'?'hti-fnx':'hti-cpi'}">${t.token==='FNX'?'🔥':'🏆'}</div>
+      <div class="hti-icon hti-cpi">🏆</div>
       <div class="hti-info">
         <div class="hti-name">${t.estudiante}</div>
         <div class="hti-desc">${t.desc} · ${t.comercio}</div>

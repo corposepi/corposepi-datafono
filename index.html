@@ -559,7 +559,13 @@ let scanInterval = null;
 // ══ INIT ══
 (function(){
   // Inicializar Firebase siempre (necesario tanto para login como para QR cobro)
-  try{ if(!firebase.apps.length) firebase.initializeApp(FB_CONFIG); db=firebase.database(); firebase.auth().signInAnonymously().catch(e=>console.error('Auth anónima:',e)); }catch(e){ console.warn('Firebase init error',e); }
+  try{
+    if(!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
+    db=firebase.database();
+    firebase.auth().signInAnonymously().catch(e=>console.error('Auth anónima:',e));
+    // Mantiene una conexión persistente activa (necesario para que db.transaction() en procesarPago funcione de forma fiable)
+    db.ref('.info/connected').on('value', ()=>{});
+  }catch(e){ console.warn('Firebase init error',e); }
   // Check if QR cobro landing
   const p = new URLSearchParams(window.location.search);
   if(p.get('cobro')){ showCobroLanding(p); }

@@ -569,8 +569,20 @@ let scanInterval = null;
 function showCobroLanding(p){
   const comercio = decodeURIComponent(p.get('comercio')||'CORPOSEPI');
   const monto    = p.get('monto')||'0';
-  const token    = p.get('token')||'CPI';
+  const token    = 'CPI'; // el datáfono de cobro por QR solo opera en CPI, sin importar lo que traiga el link
   const desc     = decodeURIComponent(p.get('desc')||'');
+
+  // Rechazar links de cobro manipulados con monto inválido/negativo antes de mostrar nada
+  const montoNum = parseFloat(monto);
+  if(!montoNum || isNaN(montoNum) || montoNum<=0){
+    document.getElementById('login').style.display='none';
+    document.getElementById('app').style.display='none';
+    const err = document.createElement('div');
+    err.style.cssText='position:fixed;inset:0;background:#0a0a0a;display:flex;align-items:center;justify-content:center;color:#f87171;font-family:Montserrat,sans-serif;text-align:center;padding:2rem;';
+    err.innerHTML = '⚠️ Link de cobro inválido.';
+    document.body.appendChild(err);
+    return;
+  }
 
   // Ocultar login y app SIN destruir el PIN overlay
   document.getElementById('login').style.display='none';
@@ -864,6 +876,8 @@ async function confirmarPago(){
 async function procesarPago(id, monto, token, desc, comercio){
   try{
     if(!db) return {ok:false, error:'⚠️ Sin conexión a Firebase'};
+    monto = parseFloat(monto);
+    if(!monto || isNaN(monto) || monto<=0) return {ok:false, error:'⚠️ Monto inválido'};
     // Buscar estudiante
     const snap = await db.ref('corposepi').once('value');
     const data = snap.val();
@@ -873,19 +887,30 @@ async function procesarPago(id, monto, token, desc, comercio){
     if(idx<0) return {ok:false, error:'❌ ID '+id+' no encontrado'};
     const s = students[idx];
     if(s.status==='blocked') return {ok:false, error:'🚫 Carnet bloqueado'};
-    // Verificar saldo
-    const saldoActual = parseFloat(token==='FNX'?s.fnx||0:s.cpi||0);
-    if(saldoActual < monto) return {ok:false, error:`⚠️ Saldo insuficiente. Tiene ${saldoActual} ${token}, necesita ${monto} ${token}`};
-    // Descontar
-    const saldoNuevo = (saldoActual - monto).toFixed(2);
+
+    // Descuento atómico (transacción de Firebase): evita doble gasto si dos cobros
+    // llegan casi al mismo tiempo — cada intento relee el saldo real del servidor.
     const campo = token==='FNX'?'fnx':'cpi';
-    await db.ref(`corposepi/students/${idx}/${campo}`).set(saldoNuevo);
+    const saldoRef = db.ref(`corposepi/students/${idx}/${campo}`);
+    let saldoAntesTx=null, saldoNuevoTx=null, fondosInsuficientes=false;
+    const txResult = await saldoRef.transaction(saldoActualRaw=>{
+      const saldoActual = parseFloat(saldoActualRaw||0);
+      if(saldoActual < monto){ fondosInsuficientes = true; return; } // aborta, no modifica nada
+      saldoAntesTx = saldoActual;
+      saldoNuevoTx = parseFloat((saldoActual - monto).toFixed(2));
+      return saldoNuevoTx.toFixed(2);
+    });
+    if(fondosInsuficientes || !txResult.committed){
+      const saldoActual = parseFloat((await saldoRef.once('value')).val()||0);
+      return {ok:false, error:`⚠️ Saldo insuficiente. Tiene ${saldoActual} ${token}, necesita ${monto} ${token}`};
+    }
+
     // Registrar transacción
     const ahora = new Date();
     const tx = {
       id, estudiante:`${s.nombres} ${s.apellidos}`,
       comercio, desc, monto, token,
-      saldoAntes:saldoActual, saldoDespues:parseFloat(saldoNuevo),
+      saldoAntes:saldoAntesTx, saldoDespues:saldoNuevoTx,
       fecha:ahora.toISOString().slice(0,10),
       hora:ahora.toLocaleTimeString('es-CO'),
       timestamp:ahora.toISOString(),
@@ -894,25 +919,24 @@ async function procesarPago(id, monto, token, desc, comercio){
     const txKey = `tx-${Date.now()}`;
     await db.ref(`transacciones/${ahora.toISOString().slice(0,10)}/${txKey}`).set(tx);
 
-    // Acreditar CPI al balance del comercio
+    // Acreditar CPI al balance del comercio (también atómico)
     if(token==='CPI' && comercioKey){
-      const snapCom = await db.ref('comercios/'+comercioKey+'/cpi').once('value');
-      const saldoCom = parseFloat(snapCom.val()||0);
-      await db.ref('comercios/'+comercioKey+'/cpi').set((saldoCom+monto).toFixed(2));
+      await db.ref('comercios/'+comercioKey+'/cpi').transaction(v=>parseFloat(((parseFloat(v||0))+monto).toFixed(2)));
     } else if(token==='CPI' && comercio){
       // Pago vía QR: buscar comercio por nombre
       const snapC = await db.ref('comercios').orderByChild('nombre').equalTo(decodeURIComponent(comercio)).once('value');
       if(snapC.exists()){
+        const espera=[];
         snapC.forEach(c=>{
-          const saldoCom = parseFloat(c.val().cpi||0);
-          db.ref('comercios/'+c.key+'/cpi').set((saldoCom+monto).toFixed(2));
+          espera.push(db.ref('comercios/'+c.key+'/cpi').transaction(v=>parseFloat(((parseFloat(v||0))+monto).toFixed(2))));
         });
+        await Promise.all(espera);
       }
     }
 
     historial.unshift(tx);
     renderHistorial();
-    return {ok:true, tx, nombre:`${s.nombres} ${s.apellidos}`, saldoNuevo, cel:s.cel||''};
+    return {ok:true, tx, nombre:`${s.nombres} ${s.apellidos}`, saldoNuevo:saldoNuevoTx, cel:s.cel||''};
   }catch(e){ return {ok:false, error:'⚠️ Error: '+e.message}; }
 }
 

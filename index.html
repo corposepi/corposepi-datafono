@@ -768,7 +768,7 @@ async function cargarMiSaldo(){
   // Ventas de hoy
   const hoy = new Date().toLocaleDateString('en-CA');
   const snapTx = await db.ref('transacciones/'+hoy).orderByChild('comercio').equalTo(comercioNombre).once('value');
-  const ventas=[]; snapTx.forEach(c=>ventas.push(c.val()));
+  const ventas=[]; snapTx.forEach(c=>{ventas.push(c.val());});
   ventas.sort((a,b)=>b.hora>a.hora?1:-1);
   const ventasEl = document.getElementById('ms-ventas');
   if(!ventasEl) return;
@@ -1074,7 +1074,7 @@ async function cargarHistorial(){
     const hoy=new Date().toISOString().slice(0,10);
     const snap=await db.ref(`transacciones/${hoy}`).once('value');
     historial=[];
-    snap.forEach(c=>historial.push(c.val()));
+    snap.forEach(c=>{historial.push(c.val());});
     historial.sort((a,b)=>b.timestamp>a.timestamp?1:-1);
     renderHistorial();
   }catch(e){}
